@@ -134,9 +134,9 @@ def compute_tally_encryption(bb):
     encrypted_tally=blank_ballot
     for ballots in bb["ballots"]:
         ###verifier preuve avant
-        ballot=elgamal.ElgamalCiphertext(ballots["ct"]["c1"],ballots["ct"]["c2"])
-        assert[verify_ballot(public_key,ballot)]
-        encrypted_tally.ElgamalCiphertext.add(ballot)
+        ballot=elgamal.ElgamalCiphertext(group,ballots["ct"]["c1"],ballots["ct"]["c2"])
+        assert[verify_ballot(public_key,ballots)]
+        encrypted_tally.homomorphic_add(ballot)
     return encrypted_tally
 
 def compute_decryption_factor_without_proof(tally_encryption, partial_key):
@@ -246,7 +246,7 @@ def combine_decryption_factors(bb):
         assert[verify_ballot(pk,ballots)]
         encrypted_tally.homomorphic_add(ballot)
         
-    #compute partial decryption 
+    #fusion partiel decryption 
     df=pow(group.g,group.q,group.p)
     for dfpartiel in bb["decryption_factors"]:
         validate_decryption_factor_proof(dfpartiel,group)
@@ -275,12 +275,45 @@ def tally(bb):
 # QUESTION 4.1: Read the bulletin board and compute an encryption of the tally. 
 #               Ask the decryption oracle for the result of the election.
 # QUESTION 4.2: What is the vote of the first ballot? 
-with open("bb.json", "r") as fd:
+
+#test
+
+
+
+with open("bb_test.json", "r") as fd:
     bb = json.loads(fd.readline())
+    #test
+    group=elgamal.ElgamalGroup(bb["group"]["p"],bb["group"]["g"])
+    sk=elgamal.ElgamalSecretKey(group,567904)
+    pk=sk.pk()
+    
+    cipher=pk.encrypt(18)
+    test=sk.decrypt(cipher)
+
+    pk2=elgamal.ElgamalPublicKey(group,bb["pk"])
+    cipher2=pk2.encrypt(18)
+    test2=sk.decrypt(cipher2)
+
+    ###########compute the encrypted tally
+    resultat=compute_tally_encryption(bb)
+    #decrypt
+    group=elgamal.ElgamalGroup(bb["group"]["p"],bb["group"]["g"])
+    sk=elgamal.ElgamalSecretKey(group,567904)
+    m=sk.decrypt(resultat)
+
+    #decrypt first ballot
+
+    vote_1=elgamal.ElgamalCiphertext(group,bb["ballots"][0]["ct"]["c1"],bb["ballots"][0]["ct"]["c2"])
+    m1=sk.decrypt(resultat)
+
+    
+      
 
 
 # QUESTION 5.2: Read the bulletin board with the decryption factors and verify 
 #               the result of the election.
 with open("bb_proof.json", "r") as fd:
     bb = json.loads(fd.readline())
-    tally(bb)
+    m=tally(bb)
+    print(m)
+
