@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Aug  7 01:07:37 2022
+
+@author: moi
+"""
 import json
 import hashlib
 import canonicaljson
@@ -25,21 +31,32 @@ def _hashg(json_obj, q):
 
 """
     ELECTION INITIALIZATION
+
 """
+def inverse(x, p):
+    """
+    @returns x^-1 in Z*_p
+    """
+
+    res = pow(x, p-2, p)
+    assert (res * x) % p == 1
+    return res
 def combine_keys(G, partial_keys):
     """
     Given the partial keys of the trustees, combine them to obtain the key of the election.
     """
-    # QUESTION 5.1
     #assert [key[1].G == G for key in partial_keys]    
     #assert [key[1] == key[0].pk() for key in partial_keys]
-    assert [key.G == G for key in partial_keys]   
 
-    pk = 1 # TO COMPLETE
-    
+    pk=partial_keys[0].y
+
+    index=0
     for key in partial_keys:
-        pk=pk*key.y
+        if index!=0:
 
+            pk=pk*key.y %G.p
+            
+        index+=1
     return elgamal.ElgamalPublicKey(G, pk)
 
 def prove_key_correctness(elgamal_key):
@@ -47,26 +64,25 @@ def prove_key_correctness(elgamal_key):
     Given an elgamal key, return a valid proof of knowledge of the secret key.
     To do so, use the _hashg method.
     """
-    # QUESTION 5.3
     pk = elgamal_key.pk().y
     group=elgamal_key.G
     sk,commit = elgamal.gen_elgamal_keypair(group)
     challenge=_hashg(json.dumps({
-                "commit": commit,
+                "commit": commit.y,
                 "pk": pk,
                 }), group.q)
-    response = sk+challenge*elgamal_key.x %group.q # TO COMPLETE
+    response = sk.x+challenge*elgamal_key.x %group.q 
 
     return {"pk": pk,
             "commit": commit,
             "response": response}
-###j'ai du modifier pour ajouter G
+
 def validate_key_correctness(key,group):
     """
     Given a proof of knowledge of the secret key of an elgamal key,
     verify that the proof is correct.
     """
-    # QUESTION 5.2
+
     pk = key["pk"] 
     commit = key["commit"] 
     response = key["response"]
@@ -92,13 +108,17 @@ def generate_election(n_trustees, p = None, g = None):
     else:
         G = elgamal.ElGamalGroup(p, g)
     partial_keys = [elgamal.gen_elgamal_keypair(G) for i in range(n_trustees)]
-   
-    pk = combine_keys(G, partial_keys)
+    public_keys=[]
+    secret_keys=[]
+    for key in partial_keys:
+        public_keys.append(key[1])
+        secret_keys.append(key[0])
+    pk = combine_keys(G, public_keys)
     
     bb = generate_empty_bb(p, g, pk.y)
     
-    #bb["tallier_keys"] = [prove_key_correctness(key) for key in partial_keys]
-    return bb, partial_keys
+    bb["tallier_keys"] = [prove_key_correctness(key) for key in secret_keys]
+    return bb, secret_keys
 
 """
     VOTING PHASE
@@ -109,10 +129,9 @@ def cast_vote(bb, vote):
     Given the bulletin board bb of an election and a 0-1 vote, update 
     the bulletin board with a valid ballot of the vote.
     """
-    # QUESTION 4.3
-    assert vote in (0, 1)
+    #assert vote in (0, 1)
     group=elgamal.ElgamalGroup(bb["group"]["p"],bb["group"]["g"])
-    public_key=elgamal.ElgamalPublicKey(group,bb["group"]["pk"])
+    public_key=elgamal.ElgamalPublicKey(group,bb["pk"])
     ballot = generate_ballot(public_key, vote)
     bb["ballots"].append(ballot)
 
@@ -125,21 +144,24 @@ def compute_tally_encryption(bb):
     Given the bulletin board bb of an election, return a valid encryption
     of the result of the election.
     """
-    # QUESTION 4.1
     group=elgamal.ElgamalGroup(bb["group"]["p"],bb["group"]["g"])
     
     #pk=combine_keys(group,bb["tallier_keys"])
     public_key=elgamal.ElgamalPublicKey(group,bb["pk"])
-    blank_ballot=public_key.encrypt(0)
-    encrypted_tally=blank_ballot
-    index=0
+    encrypted_tally=elgamal.ElgamalCiphertext(group,bb["ballots"][0]["ct"]["c1"],bb["ballots"][0]["ct"]["c2"])
+    index=1
     for ballots in bb["ballots"]:
         ###verifier preuve avant
-        index+=1
+        
         ballot=elgamal.ElgamalCiphertext(group,ballots["ct"]["c1"],ballots["ct"]["c2"])
+
         assert verify_ballot(public_key,ballots),"erreur sur le preuve du ballot numero {}".format(index)
-            
-        encrypted_tally.homomorphic_add(ballot)
+        
+        if index!=1:
+
+            encrypted_tally=encrypted_tally.homomorphic_add(ballot)
+
+        index+=1
     return encrypted_tally
 
 def compute_decryption_factor_without_proof(tally_encryption, partial_key):
@@ -147,7 +169,6 @@ def compute_decryption_factor_without_proof(tally_encryption, partial_key):
     Given an encryption of the tally and the partial key of a trustee,
     compute the corresponding decryption factor.
     """
-    # QUESTION 5.1
 
     df = pow(tally_encryption.c1,partial_key.x,partial_key.G.p) % partial_key.G.p
     
@@ -162,23 +183,25 @@ def compute_decryption_factor_with_proof(tally_encryption, partial_key):
     correct computation.
     To do so, use the _hashg method.
     """
-    # QUESTION 5.3    
 
-    pk = partial_key.pk
+    pk = partial_key.pk()
+    
     c1 = tally_encryption.c1
+    
     group=tally_encryption.G
     df = compute_decryption_factor_without_proof(tally_encryption,partial_key) 
     s=randint(0, group.q-1)
     commit = [pow(group.g,s,group.p),pow(c1,s,group.p)]
+
     challenge=_hashg(json.dumps({
-                    " pk ": pk,
+                    " pk ": pk.y,
                     " c1 ": c1,
                     " decryption_factor ": df ,
                     " commit ": commit 
                     }), group.q)
-    response = s+challenge*partial_key.sk% group.q
+    response = s+challenge*partial_key.x % group.q
     
-    return {"pk": pk,
+    return {"pk": pk.y,
             "c1": c1,
             "decryption_factor": df,
             "commit": commit,
@@ -190,7 +213,6 @@ def validate_decryption_factor_proof(decryption_factor,group):
     Given a proof of correctness of a decryption factor,
     verify that the proof is correct.
     """
-    # QUESTION 5.2
 
     pk = decryption_factor["pk"]
     c1 = decryption_factor["c1"]
@@ -205,8 +227,10 @@ def validate_decryption_factor_proof(decryption_factor,group):
                 " commit ": commit 
                 }), group.q)
     # Verify the proof
-    if pow(group.g,response,group.p)== commit[0]*pow(pk,challenge,group.p) and pow(c1,response,group.p)== commit[1]*pow(df,challenge,group.p)%group.p:
-        return True
+
+    if pow(group.g,response,group.p)== commit[0]*pow(pk,challenge,group.p)%group.p:
+        if pow(c1,response,group.p)== commit[1]*pow(df,challenge,group.p)%group.p:
+            return True
     
 
     
@@ -229,35 +253,27 @@ def combine_decryption_factors(bb):
     Given the bulletin board bb of an election with the decryption factors,
     comptue the final result.
     """
-    # QUESTION 5.2
-    ##verifier
 
-    ##encrypted_tally=compute_tally_encryption(bb) faux
-    #compute public key
+    encrypted_tally=compute_tally_encryption(bb)
     group=elgamal.ElgamalGroup(bb["group"]["p"],bb["group"]["g"])
-    partial_key=[]
-    for i in bb["tallier_keys"]:
-        partial_key.append(elgamal.ElgamalPublicKey(group,i["pk"]))
 
-    pk=combine_keys(group,partial_key)
-    #compute encrypted tally
-    blank_ballot=pk.encrypt(0)
-    encrypted_tally=blank_ballot
-    index=1
-    for ballots in bb["ballots"]:
-        ###verifier preuve avant
-        ballot=elgamal.ElgamalCiphertext(group,ballots["ct"]["c1"],ballots["ct"]["c2"])
-        assert verify_ballot(pk,ballots),"erreur sur le preuve du ballot numero {}".format(index)
-        index+=1
-        encrypted_tally.homomorphic_add(ballot)
+
+
+
         
     #fusion partiel decryption 
-    df=pow(group.g,group.q,group.p)
+    df=bb["decryption_factors"][0]["decryption_factor"]
+    
+    index=1
     for dfpartiel in bb["decryption_factors"]:
-        validate_decryption_factor_proof(dfpartiel,group)
-        df=df*dfpartiel["decryption_factor"] % group.p
         
-    res = encrypted_tally.c2/df
+        assert validate_decryption_factor_proof(dfpartiel,group),"erreur dans la preuve de part de déchiffrement {}".format(index)
+        if index!=1:     
+            df=df*dfpartiel["decryption_factor"] % group.p
+        index+=1
+        
+    res = encrypted_tally.c2*inverse(df,group.p)%group.p
+    
     return res
 
 def tally(bb):
@@ -269,28 +285,60 @@ def tally(bb):
     # QUESTION 5.2
     
     # Verify the proofs and compute the result
+    
+    
     g_m=combine_decryption_factors(bb)
     group=elgamal.ElgamalGroup(bb["group"]["p"],bb["group"]["g"])
     m = elgamal.dLog(group.p, group.g, g_m)
-    for df in bb["decryption_factors"]:     
+    index=1
+    for df in bb["decryption_factors"]:
+        assert validate_decryption_factor_proof(df,group),"erreur sur la preuve de part de chiffrement {}".format(index)
         if validate_decryption_factor_proof(df,group)==False:
+        
             return None
+        index+=1
     return m
 
-# QUESTION 4.1: Read the bulletin board and compute an encryption of the tally. 
-#               Ask the decryption oracle for the result of the election.
-# QUESTION 4.2: What is the vote of the first ballot? 
-
-#test
 
 
 
 
-      
 
 
-with open("bb_proof.json", "r") as fd:
-    bb = json.loads(fd.readline())
-    m=tally(bb)
+
+
+#with open("bb_proof.json", "r") as fd:
+ #   bb = json.loads(fd.readline())
+
+#    m=tally(bb)
+#genere une election avec 3 curateurs
+bb,partial_keys=generate_election(10)
+#phase de vote
+cast_vote(bb,1)
+cast_vote(bb,1)
+cast_vote(bb,1)
+
+cast_vote(bb,0)
+cast_vote(bb,0)
+cast_vote(bb,1)
+cast_vote(bb,1)
+
+#cast_vote(bb,2) erreur au déchiffrement
+#phase de déchiffrement
+#les curateurs calculent leur part de déchiffrement
+compute_all_decryption_factors(bb,partial_keys)
+
+res=tally(bb)
+print(res)
+
+
+
+
+
+
+
+
+
+
 
 

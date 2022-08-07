@@ -63,7 +63,7 @@ def generate_ballot(pk, m):
     :return: Ballot on the form {"ct": {"c1": <val>, "c2": <val>}, "dproof": <val>}
     :rtype: dict
     """
-    assert m in (0, 1)
+    #assert m in (0, 1)
     def _sort(x, y):
         return (x, y) if m == 0 else (y, x)
     p = pk.G.p
