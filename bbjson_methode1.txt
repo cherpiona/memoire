@@ -1,0 +1,56 @@
+<group>::= {"p": <p>,"g" : <g>}
+<pk>::=<pk>
+<bulletin_del>::={
+	"ct" : {
+		"c1" : <c1>,
+		"c2" : <c2>,
+	},
+	"zkpproof" : {
+		"commit" : <commit>,
+		"challenge" : <challenge>,
+		"response" : <response>,
+	},
+	"id_votant": <id>,
+	"aléatoire" : <aléatoire>,
+}
+<bulletin_votant>::={
+	"ct" : {
+		"c1" : <c1>,
+		"c2" : <c2>;
+	}
+	"zkpproof" : {
+		"commit" : [<a>,<b>]
+		"challenge" : [<e0>,<e1>]
+		"response" : [<f0>,<f1>]
+	},
+	"id_votant": <id>
+}
+<clef_curateur>::={
+	"pk": <pk>,
+	"zkpproof"={
+		"commit" : <a>,
+		"response" : <f>,
+	},
+}
+<part_dec>::={
+	"pk" : <pk>,
+	"c2" : <c2>,
+	"part_dec" : <d>,
+	"zkpproof" : {
+		"engagement" : [<a>,<b>],
+		"reponse" : <f>,
+	},
+}
+"id"::= <id>
+<tableau_des_bulletins>::={
+	"group" : <group>,
+	"clefs_curateurs" : [<clef_curateur_0>,<clef_curateur_1>,...],
+	"parts_dec" : [<part_dec_0>,<part_dec_1>,...],
+	"bulletins_del" : [<bulletin_del_0>,<bulletin_del_1>,...],
+	"bulletins_vot" : [<bulletin_0>,<bulletin_1>,...],
+	"pk":<pk>,
+	"ids_vot": [<id_0>,<id_1>,...]
+	"ids_del" : [<id_0>,<id_1>,...]
+}
+
+	

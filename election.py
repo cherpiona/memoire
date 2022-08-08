@@ -33,6 +33,7 @@ def _hashg(json_obj, q):
     ELECTION INITIALIZATION
 
 """
+
 def inverse(x, p):
     """
     @returns x^-1 in Z*_p
@@ -134,7 +135,27 @@ def cast_vote(bb, vote):
     public_key=elgamal.ElgamalPublicKey(group,bb["pk"])
     ballot = generate_ballot(public_key, vote)
     bb["ballots"].append(ballot)
-
+def copie_vote(bb,id_copie):
+    "update le bb avec la copie d'un vote, la preuve est distinguable"
+    "id_copie, la position du vote dans le bb[ballot]"
+    group=elgamal.ElgamalGroup(bb["group"]["p"],bb["group"]["g"])
+    z=randint(0, group.p - 1)
+    c1=bb["ballots"][id_copie]["ct"]["c1"]
+    c2=bb["ballots"][id_copie]["ct"]["c2"]
+    preuve=bb["ballots"][id_copie]["dproof"]
+    copie_c1=c1*pow(group.g, z, group.p)%group.p
+    copie_c2=c2*pow(bb["pk"], z, group.p)%group.p
+    #besoin que le challenge soit le hash du commit uniquement
+    ballot={
+        "ct": {"c1": copie_c1, "c2": copie_c2},
+        "dproof": {
+            "commit": preuve["commit"],
+            "challenge": preuve["challenge"],
+            "response": ((preuve["response"][0]+preuve["challenge"][0]*z)%group.q,(preuve["response"][1]+preuve["challenge"][1]*z)%group.q),
+            }
+        }
+    bb["ballots"].append(ballot)
+    
 """
     COMPUTATION OF THE DECRYPTION FACTORS  
 """
@@ -322,6 +343,8 @@ cast_vote(bb,0)
 cast_vote(bb,0)
 cast_vote(bb,1)
 cast_vote(bb,1)
+copie_vote(bb, 1)
+copie_vote(bb,4)
 
 #cast_vote(bb,2) erreur au déchiffrement
 #phase de déchiffrement

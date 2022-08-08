@@ -33,9 +33,9 @@ def verify_ballot(pk, ballot):
     """
     p, q, g = pk.G.p, pk.G.q, pk.G.g
     e = _hashg(json.dumps({
-        "ct": ballot["ct"],
+        #"ct": ballot["ct"],
         "commit": ballot["dproof"]["commit"],
-        "pk": pk.y,
+        #"pk": pk.y,
         }), q)
     if (sum(ballot["dproof"]["challenge"]) % q != e):
         return False
@@ -87,9 +87,9 @@ def generate_ballot(pk, m):
     z = pk.G.random_exp()
     d_true = (pow(g, z, p), pow(pk.y, z, p))
     e = _hashg(json.dumps({
-            "ct": {"c1": c1, "c2": c2},
+            #"ct": {"c1": c1, "c2": c2},
             "commit": _sort(d_true, d_sim),
-            "pk": pk.y,
+            #"pk": pk.y,
             }), q)
     e_true = (e - e_sim) % q
     f_true = (r*e_true + z) % q
