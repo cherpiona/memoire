@@ -15,7 +15,7 @@
 		"response" : [<f0>,<f1>],
 	},
 <zkpproof_copie>::={
-		"commit" : [<a_0>,<b_0>,<a_1>,<b_1>,...],
+		"commit" : [[<a_0>,<b_0>],[<a_1>,<b_1>],...],
 		"challenge" : [<e0>,<e1>,...],
 		"response" : [<f0>,<f1>,...],
 }
