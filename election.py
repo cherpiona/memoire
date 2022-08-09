@@ -303,11 +303,7 @@ def tally(bb):
     validate the correctness of the bulletin board and compute the final result.
     Return None if one of the trustees has cheated.
     """
-    # QUESTION 5.2
-    
-    # Verify the proofs and compute the result
-    
-    
+
     g_m=combine_decryption_factors(bb)
     group=elgamal.ElgamalGroup(bb["group"]["p"],bb["group"]["g"])
     m = elgamal.dLog(group.p, group.g, g_m)

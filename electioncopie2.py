@@ -134,9 +134,74 @@ def generate_election(n_curateurs,n_vot,list_del, p = None, g = None):
 """
 Phase d'election
 """
+def cast_vote_without_proof(bb,vote,id_vot):
+    """
+    a partir du tableau des bulletins bb, du vote et de l'id du votant, poste le vote 
+    sans preuve sur le bb, rend l'aléatoire utilisé pour permettre d'ecrire 
+    la preuve plus tard
+   """
+    group=elgamal.ElgamalGroup(bb["group"]["p"],bb["group"]["g"])
+    pk=elgamal.ElgamalPublicKey(group,bb["pk"])
 
+    p = group.p
+    g = group.g
+    q = group.q
+    # encrypt
+    
+    r = group.random_exp()
+    c1 = pow(g, r, p)
+    c2 = (pow(g, vote, p) * pow(pk.y, r, p)) % p
+    ct = (c1, c2)
 
-def cast_vote_with_proof(bb,vote,id_vot,delegue=False):
+    bb["bulletins_vot"][id_vot]= {
+        "ct": {"c1": c1, "c2": c2},
+        "zkpproof": None,
+        "direct":True,
+        }
+    return r;
+def recast_vote_with_proof(bb,vote,id_vot,r):
+    def _sort(x, y):
+        return (x, y) if vote == 0 else (y, x)
+    group=elgamal.ElgamalGroup(bb["group"]["p"],bb["group"]["g"])
+    pk=elgamal.ElgamalPublicKey(group,bb["pk"])
+    p = group.p
+    g = group.g
+    q = group.q
+    # encrypt
+    
+    c1 = pow(g, r, p)
+    c2 = (pow(g, vote, p) * pow(pk.y, r, p)) % p
+    ct = (c1, c2)
+    #partie simulée
+    e_sim = group.random_exp()
+    f_sim = group.random_exp()
+    s_sim = (c2*inverse(pow(g, 1-vote, p), p)) % p
+    d_sim = (
+            (pow(g, f_sim, p)*inverse(pow(c1, e_sim, p), p)) % p,
+            (pow(pk.y, f_sim, p)*inverse(pow(s_sim, e_sim, p), p)) % p,
+            )
+    # partie réelle
+    z = group.random_exp()
+    d_true = (pow(g, z, p), pow(pk.y, z, p))
+    e = _hashg(json.dumps({
+            #"ct": {"c1": c1, "c2": c2},
+            "commit": _sort(d_true, d_sim),
+            #"pk": pk.y,
+            }), q)
+    e_true = (e - e_sim) % q
+    f_true = (r*e_true + z) % q
+
+    bb["bulletins_vot"][id_vot]= {
+        "ct": {"c1": c1, "c2": c2},
+        "zkpproof": {
+            "commit": _sort(d_true, d_sim),
+            "challenge": _sort(e_true, e_sim),
+            "response": _sort(f_true, f_sim),
+            },
+        "direct":True,
+        }  
+    
+def cast_vote_with_proof(bb,vote,id_vot):
     
     """
     envoie le bulletin de vote sur bb, si le vote vient un delegué, partage l'aléatoire
@@ -151,7 +216,7 @@ def cast_vote_with_proof(bb,vote,id_vot,delegue=False):
     g = group.g
     q = group.q
     # encrypt
-
+    # We cannot use pk.encrypt(m) since we need to know the randomness used.
     r = group.random_exp()
     c1 = pow(g, r, p)
     c2 = (pow(g, vote, p) * pow(pk.y, r, p)) % p
@@ -184,9 +249,34 @@ def cast_vote_with_proof(bb,vote,id_vot,delegue=False):
             "challenge": _sort(e_true, e_sim),
             "response": _sort(f_true, f_sim),
             },
-        "aléatoire":aléatoire,
-        }    
-def copy_vote_with_proof(bb,id_copie,id_vote,delegue=False):
+        "direct":True,
+        }
+    
+
+def copy_vote_without_proof(bb,id_copie,id_vote):
+    """update le bb avec la copie d'un vote d'un délégué, la preuve de vote n'est pas 
+    publiée.
+    id_copie: la positiion du vote copié
+    id_vote: la position de la copie"""
+    group=elgamal.ElgamalGroup(bb["group"]["p"],bb["group"]["g"])
+    pk=elgamal.ElgamalPublicKey(group,bb["pk"])
+    # verifie si le vote copié est valide
+    assert id_copie in bb["ids_del"],"essai de copie d'un vote d'un non-délégué"
+    assert bb["bulletins_vot"][id_copie]!=None,"essai de copie de vote pas encore effectué"
+    c2=bb["bulletins_vot"][id_copie]["ct"]["c2"]
+    c1=bb["bulletins_vot"][id_copie]["ct"]["c1"]
+    z=randint(0, group.p - 1)
+    copie_c1=c1*pow(group.g, z, group.p)%group.p
+    copie_c2=c2*pow(bb["pk"], z, group.p)%group.p
+    #besoin que le challenge soit le hash du commit uniquement
+    ballot={
+        "ct": {"c1": copie_c1, "c2": copie_c2},
+        "zkproof": None,
+        "direct":False,
+        }
+    bb["bulletins_vot"]["id_vote"]=ballot
+
+def copy_vote_with_proof(bb,id_copie,id_vote):
     "update le bb avec la copie d'un vote d'un délégué, la preuve est indistinguable"
     "id_copie, la position du vote copié dans le bb[ballot]"
     group=elgamal.ElgamalGroup(bb["group"]["p"],bb["group"]["g"])
@@ -201,8 +291,6 @@ def copy_vote_with_proof(bb,id_copie,id_vote,delegue=False):
     g_m =  (c2 * inverse(pow(pk.y, aléatoire, group.p), group.p)) % group.p
     m = elgamal.dLog(group.p, group.g, g_m)
 
-    #calcul du nouveau preuve
-    cast_vote_with_proof(bb, m, id_vote, delegue)  
 def verify_proof_vote(G,pk,ballot):
     
     """

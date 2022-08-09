@@ -6,13 +6,20 @@
 		"c1" : <c1>,
 		"c2" : <c2>;
 	}
-	"zkpproof" : {
-		"commit" : [<a0>,<b0>,<a1>,<b1>],
+	"zkpproof" : <zkpproof_direct> ou <zkpproof_inderect>,
+	"direct":<direct>
+}
+<zkpproof_direct>::= {
+		"commit" : [<a_0>,<b_0>,<a_1>,<b_1>],
 		"challenge" : [<e0>,<e1>],
 		"response" : [<f0>,<f1>],
 	},
-	"aléatoire":<aléatoire>,
+<zkpproof_copie>::={
+		"commit" : [<a_0>,<b_0>,<a_1>,<b_1>,...],
+		"challenge" : [<e0>,<e1>,...],
+		"response" : [<f0>,<f1>,...],
 }
+
 <clef_curateur>::={
 	"pk": <pk>,
 	"zkpproof"={
