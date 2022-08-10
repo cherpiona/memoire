@@ -276,7 +276,7 @@ def copy_vote_without_proof(bb,id_copie,id_vote):
     bb["bulletins_vot"][id_vote]=ballot
     return z
 
-def recopy_vote_with_proof(bb,id_vote,z,id_copie):
+def recopy_vote_with_proof(bb,id_copie,id_vote,z):
     """ 
     Prend un bulletin de vote envoyé sans preuve et l'aléatoire utilisé pour le masquer
     et poste sur le bb le bulletin avec la preuve ajoutée
@@ -372,6 +372,8 @@ def copy_vote_with_proof(bb,id_copie,id_vote):
     ct = (Aprime, Bprime)
     
     #recuperer de tout les ct des del
+    for id_c in bb["ids_del"]:
+        assert  bb["bulletins_vot"][id_c]!=None, "la phase de vote des délégués sans preuve n'est pas encore finie"
     c1_del=[bb["bulletins_vot"][id_c]["ct"]["c1"] for id_c in bb["ids_del"]]
     c2_del=[bb["bulletins_vot"][id_c]["ct"]["c2"] for id_c in bb["ids_del"]]
     
@@ -457,8 +459,8 @@ def verify_proof_vote(G,pk,ballot,bb):
         Bprime=ballot["ct"]["c2"]
         commit=ballot["zkpproof"]["commit"]
         assert len(commit)==len(bb["ids_del"]),"un ballot est référencé en indirect alors qu'il est direct"
-        e=ballot["zkpproof"]["challenge"]
-        f=ballot["zkpproof"]["response"]
+        et=ballot["zkpproof"]["challenge"]
+        ft=ballot["zkpproof"]["response"]
         c1_del=[bb["bulletins_vot"][id_c]["ct"]["c1"] for id_c in bb["ids_del"]]
         c2_del=[bb["bulletins_vot"][id_c]["ct"]["c2"] for id_c in bb["ids_del"]]
         #verifier somme ei = E
@@ -467,15 +469,17 @@ def verify_proof_vote(G,pk,ballot,bb):
             "commit": ballot["zkpproof"]["commit"],
             #"pk": pk.y,
             }), group.q)
-        if (sum(e)%group.q!=E):
+        if (sum(et)%group.q!=E):
 
             return False
         #verifier gf et pkf
         index=0
+        
         for i in range(len(bb["ids_del"])):
-            f=f[index]
+            
+            f=ft[index]
             (a1,a2)=commit[index]
-            e=e[index]
+            e=et[index]
             AsurA=Aprime*inverse(c1_del[index],group.p)
             BsurB=Bprime*inverse(c2_del[index],group.p)
             if (pow(group.g,f, group.p) != (a1 * pow(AsurA, e, group.p)) % group.p or
@@ -623,15 +627,31 @@ def tally(bb):
 Simulation d'une élection
 """
 ### procède a la cérémonie de création de clef de l'election et genere le tableu des bulletins
-bb,sk=generate_election(3,2,[0])
+bb,sk=generate_election(3,8,[0,1,2,3])
 
-### phase de vote des délégués
+
+### phase de vote des délégués sans preuve
 #cast_vote(bb,vote,id_vote)
-cast_vote_with_proof(bb,1,0)
+r1=cast_vote_without_proof(bb, 0, 0)
+r2=cast_vote_without_proof(bb, 1, 1)
+#copy_vote_without_proof(bb, id_copie, id_vote)
+r3=copy_vote_without_proof(bb,1,2)
+r4=copy_vote_without_proof(bb,2,3)
+###phase de preuves des délégués
 ### phase de vote des votants
-
-
-copy_vote_with_proof(bb,0, 1)
+#recast_vote_with_proof(bb, vote, id_vot, r)
+#recopy_vote_with_proof(bb,id_copie,id_vote,z)
+recast_vote_with_proof(bb, 0, 0, r1)
+recast_vote_with_proof(bb,1,1,r2)
+recopy_vote_with_proof(bb,1,2,r3)
+recopy_vote_with_proof(bb,2,3,r4)
+###besoin de verifier si les ct sont pareils qu'avant la phase de vote
+###phase de vote
+copy_vote_with_proof(bb,0, 4)
+cast_vote_with_proof(bb,1,5)
+copy_vote_with_proof(bb, 2, 6)
+copy_vote_with_proof(bb,3,7)
+###besoin de verifier que le votant poste bien au bon emplacement, (signature ?)
 
 ###post-elec, les curateurs font les part de dechiffrement
 ct_res=combine_vote(bb)
@@ -640,7 +660,6 @@ cast_part_dec_with_proof(bb,ct_res,sk[1])
 cast_part_dec_with_proof(bb,ct_res,sk[2])
 ###
 print(tally(bb))
-
 
 
 
