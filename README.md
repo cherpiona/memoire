@@ -11,5 +11,3 @@ election.py: code implémentant une simulation de système de vote inspiré de c
 
 elgamal.py,number.py,canonicaljson.py: bibliothèque créée pour le cours Lelec2770 utilisée dans ce code.
 
-
-analysemethode1.py, analysemethode2.py: code utilisé pour effectuerles simulations d'élection utilisées pour analyser les temps de calcul.
