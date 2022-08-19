@@ -4,8 +4,9 @@ LELEC2770 : Privacy Enhancing Technologies
 El Gamal encryption library
 """
 
-from random import randint # Insecure randomness, better to use from "secrets" on python >= 3.6
+ # Insecure randomness, better to use from "secrets" on python >= 3.6
 from number import getPrime, isPrime
+from secrets import randbelow,choice
 
 
 def dLog(p, g, g_m):
@@ -35,7 +36,7 @@ def random_generator(p, q):
     # The group is the group of quadratic residues modulo p, that is,
     # the group of squares in Z*_p, or
     # the set of x in Z such that there exists a y such that x = y^2 mod p
-    g_prime = randint(2, p - 1) # Take any (non-unity) element of Z*_p
+    g_prime = choice(range(2, p - 1)) # Take any (non-unity) element of Z*_p
     g = pow(g_prime, 2, p)  # Squaring it gives generator of the group
     assert pow(g, q, p) == 1
     return g
@@ -108,7 +109,7 @@ class ElgamalGroup:
         Therefore, pow(self.g, self.random_exp(), self.p) is a random element
         of the group.
         """
-        return randint(0, self.q-1)
+        return choice(range(0, self.q-1))
 
 
 class ElgamalPublicKey:
@@ -250,14 +251,14 @@ if __name__ == "__main__":
     print('Testing dLog...', end='')
     for _ in range(Ntests):
         p = getPrime(32)
-        g = randint(1, p-1)
-        x = randint(1, 2**pt_nbits-1)
+        g = choice(range(1, p-1))
+        x = choice(range(1, 2**pt_nbits-1))
         assert dLog(p, g, pow(g, x, p)) == x
     print('OK.')
     print('Testing inverse...', end='')
     for _ in range(Ntests):
         p = getPrime(32)
-        x = randint(1, p-1)
+        x = choice(range(1, p-1))
         assert (inverse(x, p)*x) % p == 1
     print('OK.')
     print('Testing gen_elgamal_keypair...', end='')
@@ -270,14 +271,14 @@ if __name__ == "__main__":
     for _ in range(Ntests):
         G = gen_group()
         sk, pk = gen_elgamal_keypair(G)
-        m = randint(0, 2**pt_nbits-1)
+        m = choice(range(0, 2**pt_nbits-1))
         assert sk.decrypt(pk.encrypt(m)) == m
     print('OK.')
     print('Testing homomorphic addition...', end='')
     for _ in range(Ntests):
         G = gen_group()
-        m1 = randint(0, 2**(pt_nbits-1)-1)
-        m2 = randint(0, 2**(pt_nbits-1)-1)
+        m1 = choice(range(0, 2**(pt_nbits-1)-1))
+        m2 = choice(range(0, 2**(pt_nbits-1)-1))
         sk, pk = gen_elgamal_keypair(G)
         assert sk.decrypt(pk.encrypt(m1).homomorphic_add(pk.encrypt(m2))) == m1+m2
     print('OK.')
@@ -285,16 +286,16 @@ if __name__ == "__main__":
     for _ in range(Ntests):
         G = gen_group()
         sk, pk = gen_elgamal_keypair(G)
-        m1 = randint(0, 2**(pt_nbits-1)-1)
-        m2 = randint(0, 2**(pt_nbits-1)-1)
+        m1 = choice(range(0, 2**(pt_nbits-1)-1))
+        m2 = choice(range(0, 2**(pt_nbits-1)-1))
         assert sk.decrypt(pk.encrypt(m1+m2).homomorphic_sub(pk.encrypt(m2))) == m1
     print('OK.')
     print('Testing homomorphic multiplication...', end='')
     for _ in range(Ntests):
         G = gen_group()
         sk, pk = gen_elgamal_keypair(G)
-        m = randint(0, 2**(pt_nbits//2)-1)
-        alpha = randint(0, 2**(pt_nbits//2)-1)
+        m = choice(range(0, 2**(pt_nbits//2)-1))
+        alpha = choice(range(0, 2**(pt_nbits//2)-1))
         assert sk.decrypt(pk.encrypt(m).homomorphic_mul(alpha)) == alpha*m
     print('OK.')
 

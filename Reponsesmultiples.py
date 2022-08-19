@@ -8,8 +8,8 @@ import json
 import hashlib
 import canonicaljson
 import elgamal
-from secrets import randbelow,choice
-
+from random import randint
+from numpy import *
 """
 fonctions utile
 """
@@ -103,7 +103,7 @@ def combine_clef_curateur(G,clefs):
     return elgamal.ElgamalPublicKey(group, pk)    
      
 
-def generate_election(n_curateurs,n_vot,list_del, p = None, g = None):
+def generate_election(n_curateurs,n_vot,list_del,n_rep,p = None, g = None):
     """
     generer un Json du tableau des bulletins,
     n_curateurs: nb de curateurs sélectionnés pour l'élection
@@ -125,9 +125,11 @@ def generate_election(n_curateurs,n_vot,list_del, p = None, g = None):
     #l'admin definit la liste des votants et des delegues, la liste des delegue
     #est une sous-liste de celle des votants
     bb["ids_del"]=list_del
-    bb["bulletins_vot"]=[None]*n_vot
-    bb["sauvegarde"]=[None]*n_vot
-    bb["parts_dec"]=[]
+    
+    
+    for i in range(n_rep):
+        bb["bulletins_vot"]=[None]*n_vot
+        bb["parts_dec"]=[None]*n_curateurs
     
     #on combine les clefs de curateurs pour former la clef de l'elec
     bb["pk"]=combine_clef_curateur(bb["group"], bb["clef_curateurs"]).y
@@ -136,7 +138,7 @@ def generate_election(n_curateurs,n_vot,list_del, p = None, g = None):
 """
 Phase d'election
 """
-def cast_vote_without_proof(bb,vote,id_vot):
+def cast_vote_without_proof(bb,vote,id_vot,nquestion):
     """
     a partir du tableau des bulletins bb, du vote et de l'id du votant, poste le vote 
     sans preuve sur le bb, rend l'aléatoire utilisé pour permettre d'ecrire 
@@ -155,13 +157,13 @@ def cast_vote_without_proof(bb,vote,id_vot):
     c2 = (pow(g, vote, p) * pow(pk.y, r, p)) % p
     ct = (c1, c2)
 
-    bb["bulletins_vot"][id_vot]= {
+    bb["bulletins_vot"][id_vot][nquestion]= {
         "ct": {"c1": c1, "c2": c2},
         "zkpproof": None,
         "direct":True,
         }
     return r;
-def recast_vote_with_proof(bb,vote,id_vot,r):
+def recast_vote_with_proof(bb,vote,id_vot,r,nquestion):
     def _sort(x, y):
         return (x, y) if vote == 0 else (y, x)
     group=elgamal.ElgamalGroup(bb["group"]["p"],bb["group"]["g"])
@@ -170,8 +172,8 @@ def recast_vote_with_proof(bb,vote,id_vot,r):
     g = group.g
     q = group.q
     # encrypt
-    c1=bb["bulletins_vot"][id_vot]["ct"]["c1"]
-    c2=bb["bulletins_vot"][id_vot]["ct"]["c2"]
+    c1=bb["bulletins_vot"][id_vot][nquestion]["ct"]["c1"]
+    c2=bb["bulletins_vot"][id_vot][nquestion]["ct"]["c2"]
 
     ct = (c1, c2)
     #partie simulée
@@ -193,7 +195,7 @@ def recast_vote_with_proof(bb,vote,id_vot,r):
     e_true = (e - e_sim) % q
     f_true = (r*e_true + z) % q
 
-    bb["bulletins_vot"][id_vot]= {
+    bb["bulletins_vot"][id_vot][nquestion]= {
         "ct": {"c1": c1, "c2": c2},
         "zkpproof": {
             "commit": _sort(d_true, d_sim),
@@ -203,7 +205,7 @@ def recast_vote_with_proof(bb,vote,id_vot,r):
         "direct":True,
         }  
     
-def cast_vote_with_proof(bb,vote,id_vot):
+def cast_vote_with_proof(bb,vote,id_vot,nquestion):
     
     """
     envoie le bulletin de vote sur bb, si le vote vient un delegué, partage l'aléatoire
@@ -242,7 +244,7 @@ def cast_vote_with_proof(bb,vote,id_vot):
     e_true = (e - e_sim) % q
     f_true = (r*e_true + z) % q
 
-    bb["bulletins_vot"][id_vot]= {
+    bb["bulletins_vot"][id_vot][nquestion]= {
         "ct": {"c1": c1, "c2": c2},
         "zkpproof": {
             "commit": _sort(d_true, d_sim),
@@ -253,7 +255,7 @@ def cast_vote_with_proof(bb,vote,id_vot):
         }
     
 
-def copy_vote_without_proof(bb,id_copie,id_vote):
+def copy_vote_without_proof(bb,id_copie,id_vote,nquestion):
     """update le bb avec la copie d'un vote d'un délégué, la preuve de vote n'est pas 
     publiée.
     id_copie: la positiion du vote copié
@@ -264,9 +266,9 @@ def copy_vote_without_proof(bb,id_copie,id_vote):
     # verifie si le vote copié est valide
     assert id_copie in bb["ids_del"],"essai de copie d'un vote d'un non-délégué"
     assert bb["bulletins_vot"][id_copie]!=None,"essai de copie de vote pas encore effectué"
-    c2=bb["bulletins_vot"][id_copie]["ct"]["c2"]
-    c1=bb["bulletins_vot"][id_copie]["ct"]["c1"]
-    z=choice(range(0, group.p - 1))
+    c2=bb["bulletins_vot"][id_copie][nquestion]["ct"]["c2"]
+    c1=bb["bulletins_vot"][id_copie][nquestion]["ct"]["c1"]
+    z=randint(0, group.p - 1)
     copie_c1=c1*pow(group.g, z, group.p)%group.p
     copie_c2=c2*pow(bb["pk"], z, group.p)%group.p
     #besoin que le challenge soit le hash du commit uniquement
@@ -275,10 +277,10 @@ def copy_vote_without_proof(bb,id_copie,id_vote):
         "zkproof": None,
         "direct":False,
         }
-    bb["bulletins_vot"][id_vote]=ballot
+    bb["bulletins_vot"][id_vote][nquestion]=ballot
     return z
 
-def recopy_vote_with_proof(bb,id_copie,id_vote,z):
+def recopy_vote_with_proof(bb,id_copie,id_vote,z,nquestion):
     """ 
     Prend un bulletin de vote envoyé sans preuve et l'aléatoire utilisé pour le masquer
     et poste sur le bb le bulletin avec la preuve ajoutée
@@ -293,11 +295,11 @@ def recopy_vote_with_proof(bb,id_copie,id_vote,z):
     g = group.g
     q = group.q
     # encrypt
-    Aprime=bb["bulletins_vot"][id_vote]["ct"]["c1"]
-    Bprime=bb["bulletins_vot"][id_vote]["ct"]["c2"]
+    Aprime=bb["bulletins_vot"][id_vote][nquestion]["ct"]["c1"]
+    Bprime=bb["bulletins_vot"][id_vote][nquestion]["ct"]["c2"]
     #recuperer de tout les ct des del
-    c1_del=[bb["bulletins_vot"][id_c]["ct"]["c1"] for id_c in bb["ids_del"]]
-    c2_del=[bb["bulletins_vot"][id_c]["ct"]["c2"] for id_c in bb["ids_del"]]
+    c1_del=[bb["bulletins_vot"][id_c][nquestion]["ct"]["c1"] for id_c in bb["ids_del"]]
+    c2_del=[bb["bulletins_vot"][id_c][nquestion]["ct"]["c2"] for id_c in bb["ids_del"]]
     
     
     #calcul de la preuve
@@ -336,7 +338,7 @@ def recopy_vote_with_proof(bb,id_copie,id_vote,z):
     f_true = (z*e_true + s) % q
     f_sim[posréel]=f_true
 
-    bb["bulletins_vot"][id_vote]= {
+    bb["bulletins_vot"][id_vote][nquestion]= {
         "ct": {"c1": Aprime, "c2": Bprime},
         "zkpproof": {
             "commit": commit,
@@ -345,11 +347,12 @@ def recopy_vote_with_proof(bb,id_copie,id_vote,z):
             },
         "direct":False,
         }
+   
     
 
     
     
-def copy_vote_with_proof(bb,id_copie,id_vote):
+def copy_vote_with_proof(bb,id_copie,id_vote,nquestion):
     """update le bb avec la copie d'un vote d'un délégué, la preuve est indistinguable
       id_copie, la position du vote copié dans le bb[ballot]
       id_vote, la position de vote
@@ -366,18 +369,18 @@ def copy_vote_with_proof(bb,id_copie,id_vote):
     g = group.g
     q = group.q
     #calcul de ct du vote copié
-    c2_initial=bb["bulletins_vot"][id_copie]["ct"]["c2"]
-    c1_initial=bb["bulletins_vot"][id_copie]["ct"]["c1"]
-    z=choice(range(0, group.p - 1))
+    c2_initial=bb["bulletins_vot"][id_copie][nquestion]["ct"]["c2"]
+    c1_initial=bb["bulletins_vot"][id_copie][nquestion]["ct"]["c1"]
+    z=randint(0, group.p - 1)
     Aprime=c1_initial*pow(group.g, z, group.p)%group.p
     Bprime=c2_initial*pow(bb["pk"], z, group.p)%group.p
     ct = (Aprime, Bprime)
     
     #recuperer de tout les ct des del
     for id_c in bb["ids_del"]:
-        assert  bb["bulletins_vot"][id_c]!=None, "la phase de vote des délégués sans preuve n'est pas encore finie"
-    c1_del=[bb["bulletins_vot"][id_c]["ct"]["c1"] for id_c in bb["ids_del"]]
-    c2_del=[bb["bulletins_vot"][id_c]["ct"]["c2"] for id_c in bb["ids_del"]]
+        assert  bb["bulletins_vot"][id_c][nquestion]!=None, "la phase de vote des délégués sans preuve n'est pas encore finie"
+    c1_del=[bb["bulletins_vot"][id_c][nquestion]["ct"]["c1"] for id_c in bb["ids_del"]]
+    c2_del=[bb["bulletins_vot"][id_c][nquestion]["ct"]["c2"] for id_c in bb["ids_del"]]
     
     
     #calcul de la preuve
@@ -416,7 +419,7 @@ def copy_vote_with_proof(bb,id_copie,id_vote):
     f_true = (z*e_true + s) % q
     f_sim[posréel]=f_true
 
-    bb["bulletins_vot"][id_vote]= {
+    bb["bulletins_vot"][id_vote][nquestion]= {
         "ct": {"c1": Aprime, "c2": Bprime},
         "zkpproof": {
             "commit": commit,
@@ -426,7 +429,7 @@ def copy_vote_with_proof(bb,id_copie,id_vote):
         "direct":False,
         }
     
-def verify_proof_vote(G,pk,ballot,bb):
+def verify_proof_vote(G,pk,ballot,bb,nquestion):
     
     """
     verifie si la preuve lié au ballot sur le bb est correcte.
@@ -442,8 +445,10 @@ def verify_proof_vote(G,pk,ballot,bb):
             #"pk": pk.y,
             }), group.q)
         if (sum(ballot["zkpproof"]["challenge"]) % group.q != e):
+            
             return False
         for s in range(2):
+            
             f = ballot["zkpproof"]["response"][s]
             (d1, d2) = ballot["zkpproof"]["commit"][s]
             e = ballot["zkpproof"]["challenge"][s]
@@ -463,8 +468,8 @@ def verify_proof_vote(G,pk,ballot,bb):
         assert len(commit)==len(bb["ids_del"]),"un ballot est référencé en indirect alors qu'il est direct"
         et=ballot["zkpproof"]["challenge"]
         ft=ballot["zkpproof"]["response"]
-        c1_del=[bb["bulletins_vot"][id_c]["ct"]["c1"] for id_c in bb["ids_del"]]
-        c2_del=[bb["bulletins_vot"][id_c]["ct"]["c2"] for id_c in bb["ids_del"]]
+        c1_del=[bb["bulletins_vot"][id_c][nquestion]["ct"]["c1"] for id_c in bb["ids_del"]]
+        c2_del=[bb["bulletins_vot"][id_c][nquestion]["ct"]["c2"] for id_c in bb["ids_del"]]
         #verifier somme ei = E
         E = _hashg(json.dumps({
             #"ct": ballot["ct"],
@@ -490,18 +495,19 @@ def verify_proof_vote(G,pk,ballot,bb):
         return True
 
 def save_before_proof(bb):
-    for i in range(len(bb["ids_del"])):
+    for i in range(bb["nquestion"]):
         bb["sauvegarde"][i]=bb["bulletins_vot"][i]["ct"]
 def verify_after_proof(bb):
-    for i in range(len(bb["ids_del"])):
-        assert bb["sauvegarde"][i]==bb["bulletins_vot"][i]["ct"],"le délégué {} a changé son chiffré lors du recast".format(i)
-     
+    for j in range(bb["nquestion"]):
+        for i in range(bb["ids_del"]):
+            assert bb["sauvegarde"][j]==bb["bulletins_vot"][j]["ct"],"le délégué {} a changé son chiffré lors du recast".format(i)
+         
             
 """
 Phase post-élection
 """
 
-def combine_vote(bb):
+def combine_vote(bb,nquestion):
     
     """
     recoit le bulletin de vote et rend la combinaison des votes
@@ -510,16 +516,17 @@ def combine_vote(bb):
     
     
     public_key=elgamal.ElgamalPublicKey(group,bb["pk"])
-    encrypted_tally=elgamal.ElgamalCiphertext(group,bb["bulletins_vot"][0]["ct"]["c1"],bb["bulletins_vot"][0]["ct"]["c2"])
+    encrypted_tally=elgamal.ElgamalCiphertext(group,bb["bulletins_vot"][0][nquestion]["ct"]["c1"],bb["bulletins_vot"][0][nquestion]["ct"]["c2"])
     index=0
-    for ballot in bb["bulletins_vot"]:
+    for ballot in bb["bulletins_vot"][nquestion]:
         
         if ballot==None:
             continue
         
         ct=elgamal.ElgamalCiphertext(group,ballot["ct"]["c1"],ballot["ct"]["c2"])
         #on verifie que la preuve n'est pas mauvaise
-        assert verify_proof_vote(bb["group"],bb["pk"],ballot,bb),"erreur sur le preuve du ballot numero {}".format(index)
+
+        assert verify_proof_vote(bb["group"],bb["pk"],ballot,bb,nquestion),"erreur sur le preuve du ballot numero {}".format(index)
         #on vérifie que le délégué a bien partagé son aléatoire
 
         if index!=0:
@@ -528,7 +535,7 @@ def combine_vote(bb):
 
         index+=1
     return encrypted_tally
-def cast_part_dec_with_proof(bb,ct_res,sk_curateur):
+def cast_part_dec_with_proof(bb,ct_res,sk_curateur,nquestion):
     """
     crée la part de dechiffrement d'un curateur du résultat de l'élection et
     la poste sur le bb avec sa zkp
@@ -541,7 +548,7 @@ def cast_part_dec_with_proof(bb,ct_res,sk_curateur):
     
     group=ct_res.G
     df = pow(ct_res.c1,sk_curateur.x,G.p) % G.p 
-    s=choice(range(0, group.q-1))
+    s=randint(0, group.q-1)
     commit = [pow(group.g,s,group.p),pow(c1,s,group.p)]
 
     challenge=_hashg(json.dumps({
@@ -551,7 +558,7 @@ def cast_part_dec_with_proof(bb,ct_res,sk_curateur):
                     " commit ": commit 
                     }), group.q)
     response = s+challenge*sk_curateur.x % group.q
-    bb["parts_dec"].append({"pk": pk.y,
+    bb["parts_dec"][nquestion].append({"pk": pk.y,
             "c1": c1,
             "part_dec": df,
             "zkpproof" : {
@@ -561,17 +568,17 @@ def cast_part_dec_with_proof(bb,ct_res,sk_curateur):
             }    
     )
     
-def verify_proof_dec(part_dec,G):
+def verify_proof_dec(part_dec,G,nquestion):
     """
     recoit un dic part_dec et de sa preuve et le groupe de l'éleciton,
     rend la validité de la preuve
     """
     group=elgamal.ElgamalGroup(G["p"],G["g"])
-    pk = part_dec["pk"]
-    c1 = part_dec["c1"]
-    df = part_dec["part_dec"]
-    commit = part_dec["zkpproof"]["commit"]
-    response = part_dec["zkpproof"]["response"]
+    pk = part_dec[nquestion]["pk"]
+    c1 = part_dec[nquestion]["c1"]
+    df = part_dec[nquestion]["part_dec"]
+    commit = part_dec[nquestion]["zkpproof"]["commit"]
+    response = part_dec[nquestion]["zkpproof"]["response"]
     
     challenge=_hashg(json.dumps({
                 " pk ": pk,
@@ -589,20 +596,20 @@ def verify_proof_dec(part_dec,G):
         
         return False
 
-def combine_decryption_factors(bb):
+def combine_decryption_factors(bb,nquestion):
     """
     Recoit le tableau des bulletins bb avec la part de déchiffrement et
     renvoie le résultat de l'élection
     """
 
-    ct_res=combine_vote(bb)
+    ct_res=combine_vote(bb,nquestion)
     group=elgamal.ElgamalGroup(bb["group"]["p"],bb["group"]["g"])
         
     #fusion partiel decryption 
-    df=bb["parts_dec"][0]["part_dec"]
+    df=bb["parts_dec"][nquestion][0]["part_dec"]
     
     index=1
-    for part_dec in bb["parts_dec"]:
+    for part_dec in bb["parts_dec"][nquestion]:
         
         assert verify_proof_dec(part_dec, bb["group"]),"erreur dans la preuve de part de déchiffrement {}".format(index)
         if index!=1:     
@@ -612,17 +619,17 @@ def combine_decryption_factors(bb):
     res = ct_res.c2*inverse(df,group.p)%group.p
     
     return res
-def tally(bb):
+def tally(bb,nquestion):
     """
     recoit un dic part_dec et de sa preuve et le groupe de l'éleciton,
     rend la validité de la preuve
     """
-    g_m=combine_decryption_factors(bb)
+    g_m=combine_decryption_factors(bb,nquestion)
     
     group=elgamal.ElgamalGroup(bb["group"]["p"],bb["group"]["g"])
     m = elgamal.dLog(group.p, group.g, g_m)
     index=1
-    for df in bb["parts_dec"]:
+    for df in bb["parts_dec"][nquestion]:
         assert verify_proof_dec(df,bb["group"]),"erreur sur la preuve de part de chiffrement {}".format(index)
         if verify_proof_dec(df,bb["group"])==False:
         
@@ -634,45 +641,23 @@ def tally(bb):
 """
 Simulation d'une élection
 """
+"""
 ### procède a la cérémonie de création de clef de l'election et genere le tableu des bulletins
-bb,sk=generate_election(3,8,[0,1,2,3])
+bb,sk=generate_election(3,2,[0],2)
 
-
+cast_vote_with_proof(bb,0,0,0)
+cast_vote_with_proof(bb,0,1,0)
 ### phase de vote des délégués sans preuve
 #cast_vote(bb,vote,id_vote)
-r1=cast_vote_without_proof(bb, 0, 0)
-r2=cast_vote_without_proof(bb, 1, 1)
-#copy_vote_without_proof(bb, id_copie, id_vote)
-r3=copy_vote_without_proof(bb,1,2)
-r4=copy_vote_without_proof(bb,2,3)
-#on enregistre les votes pour verifier si ils restent les memes
-save_before_proof(bb)
-###phase de preuves des délégués
-### phase de vote des votants
-#recast_vote_with_proof(bb, vote, id_vot, r)
-#recopy_vote_with_proof(bb,id_copie,id_vote,z)
-recast_vote_with_proof(bb, 0, 0, r1)
-recast_vote_with_proof(bb,1,1,r2)
-recopy_vote_with_proof(bb,1,2,r3)
-recopy_vote_with_proof(bb,2,3,r4)
-### on verifie si les ct sont pareils qu'avant la phase de vote
-verify_after_proof(bb)
+ct_res=combine_vote(bb,0)
+cast_part_dec_with_proof(bb,ct_res,sk[0],0)
+print(bb["parts_dec"])
+cast_part_dec_with_proof(bb,ct_res,sk[1],0)
+cast_part_dec_with_proof(bb,ct_res,sk[2],0)
 
-###phase de vote
-copy_vote_with_proof(bb,0, 4)
-cast_vote_with_proof(bb,1,5)
-copy_vote_with_proof(bb, 2, 6)
-copy_vote_with_proof(bb,3,7)
-###besoin de verifier que le votant poste bien au bon emplacement, (signature ?)
-###mdp + identifiant
-###post-elec, les curateurs font les part de dechiffrement
-ct_res=combine_vote(bb)
-cast_part_dec_with_proof(bb,ct_res,sk[0])
-cast_part_dec_with_proof(bb,ct_res,sk[1])
-cast_part_dec_with_proof(bb,ct_res,sk[2])
-###
-print(tally(bb))
+print(tally(bb,0))
 
-
+"""
+x=array(bb["parts_dec"],bb["bulletins_vot"])
 
 
